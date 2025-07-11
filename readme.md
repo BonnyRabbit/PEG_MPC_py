@@ -110,41 +110,6 @@ TARGET_DISTANCE = 250  # 目标距离
 # 修改权重
 Q_ATA_NORM = 1000.0    # ATA权重
 Q_POS_NORM = 20.0      # 距离权重
-```
-
-## 模块化的优势
-
-### 1. 代码组织清晰
-- 每个模块职责单一，功能明确
-- 降低代码耦合度，提高可维护性
-- 便于团队协作开发
-
-### 2. 易于扩展
-- 可以独立修改或替换任一模块
-- 便于添加新的控制算法或动力学模型
-- 支持插件式的功能扩展
-
-### 3. 便于集成强化学习
-```python
-# 示例：集成强化学习模块
-from rl_agent import RLAgent
-
-class HybridController:
-    def __init__(self):
-        self.mpc = MPCController()
-        self.rl_agent = RLAgent()
-    
-    def get_action(self, state):
-        # MPC + RL 混合控制
-        mpc_action = self.mpc.solve(state)
-        rl_action = self.rl_agent.act(state)
-        return self.combine_actions(mpc_action, rl_action)
-```
-
-### 4. 独立测试
-- 每个模块可以独立进行单元测试
-- 便于调试和性能优化
-- 支持模块级的功能验证
 
 ## 依赖要求
 

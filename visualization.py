@@ -7,6 +7,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from config import *
 from config import output_config
+import os
 
 
 class FlightVisualization:
@@ -54,6 +55,16 @@ class FlightVisualization:
         self._plot_roll_angles(cat_states, track_start_time)
         
         plt.tight_layout()
+        
+        # 保存图形到fig文件夹
+        fig_dir = "fig"
+        if not os.path.exists(fig_dir):
+            os.makedirs(fig_dir)
+        
+        fig_path = os.path.join(fig_dir, "sim_result.png")
+        plt.savefig(fig_path, dpi=300, bbox_inches='tight')
+        print(f"仿真结果图已保存到: {fig_path}")
+        
         plt.show()
     
     def _plot_trajectories(self, x_traj, y_traj, x_t_traj, y_t_traj, track_start_time):
@@ -189,7 +200,106 @@ class FlightVisualization:
             plt_obj.axvline(x=track_start_time, color='orange', linestyle=':', linewidth=2)
             track_end_time = min(track_start_time + TRACK_HOLD_TIME, time_history[-1])
             plt_obj.axvspan(track_start_time, track_end_time, alpha=0.2, color='orange')
-
+    
+    def plot_weights_analysis(self, weights_history, track_start_time):
+        """
+        绘制权重分析图
+        
+        Args:
+            weights_history: 权重历史数据列表
+            track_start_time: 尾追开始时间
+        """
+        if not output_config.enable_visualization or not weights_history:
+            return
+            
+        # 提取权重因子数据
+        ata_weights = [w['ata_weight_factor'] for w in weights_history]
+        distance_weights = [w['distance_weight_factor'] for w in weights_history]
+        heading_weights = [w['heading_weight_factor'] for w in weights_history]
+        
+        # 提取权重项实际值数据
+        ata_weight_values = [w.get('ata_weight_value', 0) for w in weights_history]
+        pos_weight_values = [w.get('pos_weight_value', 0) for w in weights_history]
+        heading_weight_values = [w.get('heading_weight_value', 0) for w in weights_history]
+        
+        time_history = np.arange(len(weights_history)) * STEP_HORIZON
+        
+        plt.figure(figsize=(15, 12))
+        
+        # 第一个子图：权重因子的变化（三条线在一张图上，数值差距小）
+        plt.subplot(4, 1, 1)
+        plt.plot(time_history, ata_weights, 'r-', linewidth=2, label='ATA Weight Factor')
+        plt.plot(time_history, distance_weights, 'g-', linewidth=2, label='Distance Weight Factor')
+        plt.plot(time_history, heading_weights, 'b-', linewidth=2, label='Heading Weight Factor')
+        
+        # 标记尾追保持阶段
+        if track_start_time is not None:
+            plt.axvline(x=track_start_time, color='orange', linestyle=':', linewidth=2, label='Track Start')
+            track_end_time = min(track_start_time + TRACK_HOLD_TIME, time_history[-1])
+            plt.axvspan(track_start_time, track_end_time, alpha=0.2, color='orange', label='Track Phase')
+        
+        plt.xlabel('Time (s)')
+        plt.ylabel('Weight Factor')
+        plt.title('Dynamic Weight Factors over Time')
+        plt.legend()
+        plt.grid(True)
+        
+        # 第二、三、四个子图：权重项实际值的变化（三个单独的子图，数值差距大）
+        plt.subplot(4, 1, 2)
+        plt.plot(time_history, ata_weight_values, 'r-', linewidth=2, label='ATA Weight Value')
+        
+        # 标记尾追保持阶段
+        if track_start_time is not None:
+            plt.axvline(x=track_start_time, color='orange', linestyle=':', linewidth=2)
+            plt.axvspan(track_start_time, track_end_time, alpha=0.2, color='orange')
+        
+        plt.xlabel('Time (s)')
+        plt.ylabel('ATA Weight Value')
+        plt.title('ATA Weight Value over Time')
+        plt.legend()
+        plt.grid(True)
+        
+        plt.subplot(4, 1, 3)
+        plt.plot(time_history, pos_weight_values, 'g-', linewidth=2, label='Distance Weight Value')
+        
+        # 标记尾追保持阶段
+        if track_start_time is not None:
+            plt.axvline(x=track_start_time, color='orange', linestyle=':', linewidth=2)
+            plt.axvspan(track_start_time, track_end_time, alpha=0.2, color='orange')
+        
+        plt.xlabel('Time (s)')
+        plt.ylabel('Distance Weight Value')
+        plt.title('Distance Weight Value over Time')
+        plt.legend()
+        plt.grid(True)
+        
+        plt.subplot(4, 1, 4)
+        plt.plot(time_history, heading_weight_values, 'b-', linewidth=2, label='Heading Weight Value')
+        
+        # 标记尾追保持阶段
+        if track_start_time is not None:
+            plt.axvline(x=track_start_time, color='orange', linestyle=':', linewidth=2)
+            plt.axvspan(track_start_time, track_end_time, alpha=0.2, color='orange')
+        
+        plt.xlabel('Time (s)')
+        plt.ylabel('Heading Weight Value')
+        plt.title('Heading Weight Value over Time')
+        plt.legend()
+        plt.grid(True)
+        
+        
+        plt.tight_layout()
+        
+        # 保存权重分析图
+        if not os.path.exists('fig'):
+            os.makedirs('fig')
+        plt.savefig('fig/weights_analysis.png', dpi=300, bbox_inches='tight')
+        
+        if output_config.enable_print_output:
+            print("权重分析图像已保存到 fig/weights_analysis.png")
+        
+        plt.show()
+        
 
 class RealTimeMonitor:
     """实时监控显示类"""
@@ -230,27 +340,104 @@ class DataLogger:
         self.cat_states = None
         self.cat_controls = None
         self.times = np.array([[0]])
+        self.weights_history = []
         
     def initialize(self, X0, u0):
         """初始化数据记录"""
         self.cat_states = self._DM2Arr(X0)
         self.cat_controls = self._DM2Arr(u0[:, 0]).reshape(1, -1)
         
-    def log_data(self, X0, u, iteration_time):
+    def log_data(self, X0, u, iteration_time, weights=None):
         """记录数据"""
         self.cat_states = np.dstack((self.cat_states, self._DM2Arr(X0)))
         self.cat_controls = np.vstack((self.cat_controls, self._DM2Arr(u[:, 0]).reshape(1, -1)))
         self.times = np.vstack((self.times, iteration_time))
+        if weights is not None:
+            self.weights_history.append(weights)
         
     def get_logged_data(self):
         """获取记录的数据"""
         return {
             'states': self.cat_states,
             'controls': self.cat_controls,
-            'times': self.times
+            'times': self.times,
+            'weights': self.weights_history
         }
     
     @staticmethod
     def _DM2Arr(dm):
         """将CasADi DM矩阵转换为numpy数组"""
         return np.array(dm.full())
+    
+    def plot_weights_analysis(self, weights_history, track_start_time):
+        """
+        绘制权重分析图
+        
+        Args:
+            weights_history: 权重历史数据列表
+            track_start_time: 尾追开始时间
+        """
+        if not output_config.enable_visualization or not weights_history:
+            return
+            
+        # 提取权重因子数据
+        ata_weights = [w['ata_weight_factor'] for w in weights_history]
+        distance_weights = [w['distance_weight_factor'] for w in weights_history]
+        heading_weights = [w['heading_weight_factor'] for w in weights_history]
+        
+        # 提取权重项实际值数据
+        ata_weight_values = [w.get('ata_weight_value', 0) for w in weights_history]
+        pos_weight_values = [w.get('pos_weight_value', 0) for w in weights_history]
+        heading_weight_values = [w.get('heading_weight_value', 0) for w in weights_history]
+        
+        time_history = np.arange(len(weights_history)) * STEP_HORIZON
+        
+        plt.figure(figsize=(15, 12))
+        
+        # 第一个子图：权重因子的变化（三条线在一张图上，数值差距小）
+        plt.subplot(4, 1, 1)
+        plt.plot(time_history, ata_weights, 'r-', linewidth=2, label='ATA Weight Factor')
+        plt.plot(time_history, distance_weights, 'g-', linewidth=2, label='Distance Weight Factor')
+        plt.plot(time_history, heading_weights, 'b-', linewidth=2, label='Heading Weight Factor')
+        
+        plt.xlabel('Time (s)')
+        plt.ylabel('Weight Factor')
+        plt.title('Dynamic Weight Factors over Time')
+        plt.legend()
+        plt.grid(True)
+        
+        # 第二、三、四个子图：权重项实际值的变化（三个单独的子图，数值差距大）
+        plt.subplot(4, 1, 2)
+        plt.plot(time_history, ata_weight_values, 'r-', linewidth=2, label='ATA Weight Value')
+        plt.xlabel('Time (s)')
+        plt.ylabel('ATA Weight Value')
+        plt.title('ATA Weight Value over Time')
+        plt.legend()
+        plt.grid(True)
+        
+        plt.subplot(4, 1, 3)
+        plt.plot(time_history, pos_weight_values, 'g-', linewidth=2, label='Distance Weight Value')
+        plt.xlabel('Time (s)')
+        plt.ylabel('Distance Weight Value')
+        plt.title('Distance Weight Value over Time')
+        plt.legend()
+        plt.grid(True)
+        
+        plt.subplot(4, 1, 4)
+        plt.plot(time_history, heading_weight_values, 'b-', linewidth=2, label='Heading Weight Value')
+        plt.xlabel('Time (s)')
+        plt.ylabel('Heading Weight Value')
+        plt.title('Heading Weight Value over Time')
+        plt.legend()
+        plt.grid(True)
+        plt.tight_layout()
+        
+        # 保存权重分析图
+        if not os.path.exists('fig'):
+            os.makedirs('fig')
+        plt.savefig('fig/weights_analysis.png', dpi=300, bbox_inches='tight')
+        
+        if output_config.enable_print_output:
+            print("权重分析图像已保存到 fig/weights_analysis.png")
+        
+        plt.show()

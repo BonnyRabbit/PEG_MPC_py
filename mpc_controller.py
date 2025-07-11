@@ -72,15 +72,21 @@ class MPCController:
             pos_error_norm = (st[11] - TARGET_DISTANCE) / DISTANCE_SCALE
             acceleration_penalty_norm = con[0]**2
             steering_penalty_norm = (con[1] / ANGLE_SCALE)**2
+            heading_error_norm = (st[0] - st[5]) / ANGLE_SCALE
             
             # 动态权重：当ATA较大时，优先建立尾追；当ATA较小时，同时控制距离
             ata_magnitude = ca.fabs(st[10])
-            distance_weight_factor = 1 / (1 + ca.exp(-10 * (0.5 - ata_magnitude)))
-            
+            dist_magnitude = ca.fabs(st[11])
+            ata_weight_factor = ca.if_else(dist_magnitude < THRESHOLD_DISTANCE, 0.5, 1)
+            keep_intrack_weight_factor = ca.if_else(dist_magnitude < (TARGET_DISTANCE + 350), 15, 0.0)
+            distance_weight_factor = 1 / (1 + ca.exp(60/57.3 - ata_magnitude)) + keep_intrack_weight_factor
+            heading_weight_factor = ca.if_else(dist_magnitude < THRESHOLD_DISTANCE, 1.0, 0.0)
+
             # 组合归一化成本函数
             self.cost_fn = self.cost_fn + \
-                Q_ATA_NORM * ata_error_norm**2 + \
+                Q_ATA_NORM * ata_weight_factor * ata_error_norm**2  + \
                 Q_POS_NORM * distance_weight_factor * pos_error_norm**2 + \
+                Q_PSI_NORM * heading_weight_factor * heading_error_norm**2 + \
                 R_DV_NORM * acceleration_penalty_norm + \
                 R_DPHI_NORM * steering_penalty_norm
             

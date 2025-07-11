@@ -114,10 +114,20 @@ class MPCFlightSimulation:
                 state_analysis, u, self.real_model, self.mpc_iter
             )
             
-            # 记录数据
+            # 记录数据（包括权重）
             t2 = time()
             iteration_time = t2 - t1
-            self.data_logger.log_data(self.X0, u, iteration_time)
+            weights_data = {
+                'ata_weight_factor': state_analysis['ata_weight_factor'],
+                'distance_weight_factor': state_analysis['distance_weight_factor'],
+                'heading_weight_factor': state_analysis['heading_weight_factor'],
+                'ata_weight_value': state_analysis['ata_weight_value'],
+                'pos_weight_value': state_analysis['pos_weight_value'],
+                'heading_weight_value': state_analysis['heading_weight_value'],
+                'current_distance': state_analysis['current_distance'],
+                'current_ata_rad': state_analysis['current_ata_rad']
+            }
+            self.data_logger.log_data(self.X0, u, iteration_time, weights_data)
             
             # 状态推进
             self.t0, self.state_init, self.u0 = self.mpc_controller.shift_timestep(
@@ -153,6 +163,12 @@ class MPCFlightSimulation:
         self.visualization.plot_simulation_results(
             logged_data['states'], 
             logged_data['controls'], 
+            self.mission_controller.track_start_time
+        )
+        
+        # 可视化权重分析
+        self.visualization.plot_weights_analysis(
+            logged_data['weights'],
             self.mission_controller.track_start_time
         )
 

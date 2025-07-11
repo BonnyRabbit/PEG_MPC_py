@@ -100,9 +100,20 @@ class StateAnalyzer:
         
         # 计算归一化误差值
         ata_magnitude = abs(current_ata_rad)
-        distance_weight_factor = 1 / (1 + np.exp(-10 * (0.5 - ata_magnitude)))
+        dist_magnitude = abs(current_dist)
+        ata_weight_factor = 0.5 if dist_magnitude < THRESHOLD_DISTANCE else 1.0
+        keep_intrack_weight_factor = 15 if dist_magnitude < (TARGET_DISTANCE + 350) else 0.0
+        distance_weight_factor = 1 / (1 + np.exp(np.deg2rad(60) - ata_magnitude)) + keep_intrack_weight_factor
+        # 归一化距离误差
+        heading_weight_factor = 1.0 if dist_magnitude < THRESHOLD_DISTANCE else 0.0
         ata_error_norm = current_ata_rad / ANGLE_SCALE
         pos_error_norm = (current_dist - TARGET_DISTANCE) / DISTANCE_SCALE
+        heading_error_norm = (float(state_init[0]) - float(state_init[5])) / ANGLE_SCALE
+        
+        # 计算实际权重项值
+        ata_weight_value = Q_ATA_NORM * ata_weight_factor * ata_error_norm**2
+        pos_weight_value = Q_POS_NORM * distance_weight_factor * pos_error_norm**2
+        heading_weight_value = Q_PSI_NORM * heading_weight_factor * heading_error_norm**2
         
         return {
             'current_time': current_time,
@@ -111,9 +122,14 @@ class StateAnalyzer:
             'current_distance': current_dist,
             'pursuer_heading': pursuer_heading,
             'target_heading': target_heading,
-            'distance_weight_factor': distance_weight_factor,
             'ata_error_norm': ata_error_norm,
-            'pos_error_norm': pos_error_norm
+            'pos_error_norm': pos_error_norm,
+            'ata_weight_factor': ata_weight_factor,
+            'distance_weight_factor': distance_weight_factor,
+            'heading_weight_factor': heading_weight_factor,
+            'ata_weight_value': ata_weight_value,
+            'pos_weight_value': pos_weight_value,
+            'heading_weight_value': heading_weight_value
         }
     
     @staticmethod
@@ -138,13 +154,17 @@ class StateAnalyzer:
             target_heading = state_analysis['target_heading']
             ata_error_norm = state_analysis['ata_error_norm']
             pos_error_norm = state_analysis['pos_error_norm']
+            ata_weight_factor = state_analysis['ata_weight_factor']
             distance_weight_factor = state_analysis['distance_weight_factor']
-            
+            heading_weight_factor = state_analysis['heading_weight_factor']
+
             print(f"\n时间: {current_time:.1f}s | ATA: {current_ata_deg:.1f}° | 距离: {current_dist:.0f}m")
             print(f"追击者航向: {pursuer_heading:.1f}° | 目标航向: {target_heading:.1f}°")
             print(f"控制输入: 加速度={float(u[0,0]):.2f}, 转向={np.degrees(float(u[1,0])):.1f}°/s")
             print(f"归一化误差: ATA_norm={ata_error_norm:.3f}, Pos_norm={pos_error_norm:.3f}")
-            print(f"归一化权重: ATA={Q_ATA_NORM:.1f}, Pos={Q_POS_NORM:.1f}(×{distance_weight_factor:.2f})")
+            print(f"归一化权重: ATA={Q_ATA_NORM:.1f}(x{ata_weight_factor:.2f}),"
+                  f"Pos={Q_POS_NORM:.1f}(×{distance_weight_factor:.2f}),"
+                  f"Heading={Q_PSI_NORM:.1f}(×{heading_weight_factor:.2f})")
             print(f"敌机机动状态: {real_model.maneuver_controller.get_status_info()}")
             
             if current_ata_deg > 30:

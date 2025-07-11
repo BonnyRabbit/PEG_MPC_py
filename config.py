@@ -15,6 +15,7 @@ N = 80              # 预测步数
 SIM_TIME = 300      # 仿真时间 (s)
 
 # ========== 任务参数 ==========
+THRESHOLD_DISTANCE = 2000  # 距离阈值 (m)
 TARGET_DISTANCE = 250   # 目标跟随距离 (m)
 TRACK_HOLD_TIME = 20    # 尾追保持时间 (s)
 
@@ -100,6 +101,7 @@ DISTANCE_SCALE = 500.0       # 距离归一化 (m)
 # 归一化后的权重设置
 Q_ATA_NORM = 1000.0          # ATA权重 (归一化后)
 Q_POS_NORM = 20.0           # 距离误差权重 (归一化后)
+Q_PSI_NORM = 800.0            # 航向误差权重 (归一化后)
 R_DV_NORM = 0.1             # 加速度控制权重 (归一化后)
 R_DPHI_NORM = 1.0           # 转向控制权重 (归一化后)
 
